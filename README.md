@@ -59,3 +59,7 @@ node serve.ts
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Development note
+
+Porto Verde was built by an AI agent in a make.fun-recorded session; the badges above are make.fun's live competition, rank and reward badges for this entry.
