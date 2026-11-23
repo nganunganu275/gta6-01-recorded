@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Porto Verde — Open-World Crime</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #111; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+  .hidden { display: none !important; }
+  #hud { position: fixed; inset: 0; pointer-events: none; color: #fff; }
+  .panel { background: rgba(10, 10, 16, 0.62); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 10px; backdrop-filter: blur(3px); }
+  #stats { position: absolute; top: 14px; left: 14px; padding: 10px 14px; min-width: 210px; }
+  #stats .row { display: flex; align-items: center; gap: 8px; margin: 3px 0; font-size: 15px; font-weight: 600; }
+  #hp-bar { width: 150px; height: 12px; background: rgba(255,255,255,0.18); border-radius: 6px; overflow: hidden; }
+  #hp-fill { height: 100%; width: 100%; background: #2ecc71; border-radius: 6px; transition: width 0.2s; }
+  #stars { font-size: 20px; letter-spacing: 2px; color: rgba(255,255,255,0.55); }
+  #money { color: #7cf29c; }
+  #minimap-wrap { position: absolute; top: 14px; right: 14px; }
+  #minimap { width: 150px; height: 150px; border-radius: 50%; }
+  #mission-box { position: absolute; left: 14px; bottom: 14px; padding: 10px 14px; max-width: 430px; }
+  #mission-name { font-size: 12px; letter-spacing: 1.5px; color: #ffd700; font-weight: 700; }
+  #objective { font-size: 16px; font-weight: 600; margin-top: 2px; }
+  #timer { font-size: 15px; font-weight: 700; color: #ff8a5c; margin-top: 2px; min-height: 18px; }
+  #speed { position: absolute; right: 18px; bottom: 16px; font-size: 26px; font-weight: 800; text-shadow: 0 2px 6px rgba(0,0,0,0.7); }
+  #bust { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); width: 260px; padding: 8px 12px; text-align: center; display: none; }
+  #bust.show { display: block; }
+  #bust .label { font-size: 13px; font-weight: 700; letter-spacing: 1px; color: #ff6b6b; }
+  #bust-bar { height: 10px; background: rgba(255,255,255,0.18); border-radius: 5px; overflow: hidden; margin-top: 5px; }
+  #bust-fill { height: 100%; width: 0; background: #ff4757; }
+  #toast { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); padding: 9px 18px; font-size: 16px; font-weight: 600; opacity: 0; transition: opacity 0.3s; max-width: 80%; text-align: center; }
+  #toast.show { opacity: 1; }
+  #district { position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%); font-size: 44px; font-weight: 800; letter-spacing: 3px; color: #fff; text-shadow: 0 3px 12px rgba(0,0,0,0.8); opacity: 0; transition: opacity 0.4s; pointer-events: none; }
+  #district.show { opacity: 1; }
+  .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(8, 8, 14, 0.55); z-index: 10; }
+  .overlay.show { display: flex; }
+  .card { text-align: center; color: #fff; max-width: 640px; padding: 34px 44px; }
+  .card h1 { font-size: 58px; letter-spacing: 4px; color: #ffd700; text-shadow: 0 4px 18px rgba(0,0,0,0.8); }
+  .card h2 { font-size: 40px; letter-spacing: 2px; }
+  .card .sub { font-size: 17px; color: #ddd; margin: 10px 0 4px; line-height: 1.5; }
+  .card .tag { font-size: 13px; letter-spacing: 2px; color: #ffb347; font-weight: 700; }
+  .controls { margin: 16px auto 4px; text-align: left; display: inline-block; font-size: 14px; color: #ccc; line-height: 1.9; }
+  .controls b { color: #fff; }
+  .btn { pointer-events: auto; display: inline-block; margin: 8px 6px 0; padding: 12px 26px; font-size: 17px; font-weight: 700; color: #111; background: #ffd700; border: none; border-radius: 8px; cursor: pointer; }
+  .btn:hover { background: #ffe14d; }
+  .btn.ghost { background: rgba(255,255,255,0.14); color: #fff; border: 1px solid rgba(255,255,255,0.35); }
+  .btn.ghost:hover { background: rgba(255,255,255,0.24); }
+  #overlay-busted .card h2 { color: #5ca8ff; }
+  #overlay-wasted .card h2 { color: #ff6b6b; }
+  #overlay-complete .card h2 { color: #7cf29c; }
+</style>
+</head>
+<body>
+<canvas id="game" width="1280" height="720"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="stats" class="panel">
+    <div class="row"><span>HP</span><div id="hp-bar"><div id="hp-fill"></div></div></div>
+    <div class="row"><span id="money">$120</span><span id="ammo"></span></div>
+    <div class="row"><span id="stars">☆☆☆☆☆</span></div>
+  </div>
+  <div id="minimap-wrap"><canvas id="minimap" width="150" height="150"></canvas></div>
+  <div id="mission-box" class="panel">
+    <div id="mission-name">MISSION 1/5 — THE PICKUP</div>
+    <div id="objective">Reach the gold marker to start.</div>
+    <div id="timer"></div>
+  </div>
+  <div id="speed"></div>
+  <div id="bust" class="panel"><div class="label">BUSTED?</div><div id="bust-bar"><div id="bust-fill"></div></div></div>
+  <div id="toast" class="panel"></div>
+  <div id="district"></div>
+</div>
+
+<div id="overlay-menu" class="overlay">
+  <div class="card panel">
+    <div class="tag">AN OPEN-WORLD CRIME GAME</div>
+    <h1>PORTO VERDE</h1>
+    <p class="sub">Sun, sea and six districts of trouble. You are Nia "Nova" Okafor,
+    a getaway driver new in town. Fixer Dante Cole has five jobs for you —
+    if the police and the Rust Kings don't get you first.</p>
+    <div class="controls">
+      <b>WASD</b> move / drive &nbsp;·&nbsp; <b>Mouse</b> aim &nbsp;·&nbsp; <b>Click</b> shoot<br>
+      <b>E</b> enter / steal car &nbsp;·&nbsp; <b>Shift</b> sprint &nbsp;·&nbsp; <b>Space</b> handbrake<br>
+      <b>P</b> pause &nbsp;·&nbsp; <b>M</b> mute &nbsp;·&nbsp; progress autosaves
+    </div>
+    <div>
+      <button id="btn-new" class="btn">New Game</button>
+      <button id="btn-continue" class="btn ghost hidden">Continue</button>
+    </div>
+  </div>
+</div>
+
+<div id="overlay-pause" class="overlay">
+  <div class="card panel">
+    <h2>PAUSED</h2>
+    <p class="sub">Porto Verde waits for no one — except right now.</p>
+    <div>
+      <button id="btn-resume" class="btn">Resume</button>
+      <button id="btn-restart" class="btn ghost">Restart</button>
+      <button id="btn-quit" class="btn ghost">Main Menu</button>
+    </div>
+  </div>
+</div>
+
+<div id="overlay-busted" class="overlay">
+  <div class="card panel">
+    <h2>BUSTED</h2>
+    <p class="sub">The Porto Verde police finally caught up with you.</p>
+    <p class="sub" id="busted-fine"></p>
+    <div><button id="btn-busted" class="btn">Walk Free</button></div>
+  </div>
+</div>
+
+<div id="overlay-wasted" class="overlay">
+  <div class="card panel">
+    <h2>WASTED</h2>
+    <p class="sub">Porto Verde got the better of you this time.</p>
+    <div><button id="btn-wasted" class="btn">Wake Up at the Hospital</button></div>
+  </div>
+</div>
+
+<div id="overlay-complete" class="overlay">
+  <div class="card panel">
+    <h2>STORY COMPLETE</h2>
+    <p class="sub">The Rust Kings are finished and Dante's jobs are done. Porto Verde is yours now, Nova.</p>
+    <p class="sub" id="complete-stats"></p>
+    <div><button id="btn-roam" class="btn">Keep Roaming</button></div>
+  </div>
+</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
